@@ -11,11 +11,11 @@ class World:
         self.grid = [['.' for _ in range(width)] for _ in range(height)]
 
     def is_empty(self, x, y):
-        return all(organism.x != x or organism.y != y for organism in self.organisms)
+        return not any(organism.x == x and organism.y == y for organism in self.organisms)
 
     def get_empty_neighbors(self, x, y):
         neighbors = [(nx, ny) for nx in range(x-1, x+2) for ny in range(y-1, y+2)
-                     if 0 <= nx < self.width and 0 <= ny < self.height]
+                     if 0 <= nx < self.width and 0 <= ny < self.height and not (nx == x and ny == y)]
         return [(nx, ny) for (nx, ny) in neighbors if self.is_empty(nx, ny)]
 
     def add_organism(self, organism):
@@ -53,11 +53,7 @@ class World:
         self.organisms = [
             organism for organism in self.organisms if organism.age < organism.lifespan]
 
-    def simulate_round(self):
-        # Define what happens in a round of simulation
-        pass
-
-    def evolve(self):
+    def evolve_organisms(self):
         # Define rules for evolution and mutation
         pass
 
@@ -85,7 +81,7 @@ class Organism:
     def age_one_step(self):
         self.age += 1
 
-    def eat(self):
+    def eat(self, world):
         # Code to determine how the organism eats
         pass
 
@@ -94,18 +90,33 @@ class Organism:
             empty_neighbors = world.get_empty_neighbors(self.x, self.y)
             if empty_neighbors:
                 new_x, new_y = random.choice(empty_neighbors)
-                return self.__class__(self.health, self.speed, self.strength, self.reproduction_rate, self.lifespan, new_x, new_y)
+                return self.__class__(self.health, self.speed, self.strength, self.reproduction_rate, self.lifespan, new_x, new_y, self.hunger_decrement)
         return None
 
 
 class Carnivore(Organism):
-    def __init__(self, health, speed, strength, reproduction_rate, lifespan, x, y):
+    def __init__(self, health, speed, strength, reproduction_rate, lifespan, x, y, hunger_decrement):
         super().__init__(health, speed, strength, reproduction_rate, lifespan, x, y)
+        self.hunger_decrement = hunger_decrement
+
+    def eat(self, world):
+        prey = [organism for organism in world.organisms if isinstance(
+            organism, Herbivore)]
+        nearby_prey = [organism for organism in prey
+                       if abs(organism.x - self.x) <= self.speed and abs(organism.y - self.y) <= self.speed]
+
+        if nearby_prey:
+            victim = random.choice(nearby_prey)
+            world.organisms.remove(victim)
+            self.health += victim.health
+        else:
+            self.health -= self.hunger_decrement
 
 
 class Herbivore(Organism):
-    def __init__(self, health, speed, strength, reproduction_rate, lifespan, x, y):
+    def __init__(self, health, speed, strength, reproduction_rate, lifespan, x, y, hunger_decrement):
         super().__init__(health, speed, strength, reproduction_rate, lifespan, x, y)
+        self.hunger_decrement = hunger_decrement
 
 
 class Simulation:
@@ -131,6 +142,7 @@ class Simulation:
             if not self.paused or self.step:
                 for organism in self.world.organisms:
                     organism.age_one_step()
+                    organism.eat(self.world)
                 self.world.remove_dead_organisms()
                 self.world.reproduce_organisms()
                 self.world.move_organisms()
@@ -141,8 +153,8 @@ class Simulation:
 
 def main():
     world = World(10, 10)
-    world.add_organism(Herbivore(10, 1, 2, 0.1, 15, 5, 5))
-    world.add_organism(Carnivore(15, 2, 3, 0.05, 35, 3, 7))
+    world.add_organism(Herbivore(10, 1, 2, 0.1, 20, 10, 10, 0.2))
+    world.add_organism(Carnivore(15, 2, 3, 0.05, 15, 0, 0, 0.2))
 
     simulation = Simulation(world)
     simulation.run()
